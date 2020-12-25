@@ -108,13 +108,13 @@ def save_augmentations(images: list, bbs: list, df: pd.DataFrame, filename: str,
         bb_a = bb_a.remove_out_of_image().clip_out_of_image()
 
         # iterate over the bounding boxes
+        at_least_one_box = False
         for bbs in bb_a:
             if resize:
                 bbs = bbs.project(org_shape, shape)
             arr = bbs.compute_out_of_image_fraction(img_a)
             if arr < 0.8:
-                # save image at specified folder
-                cv2.imwrite(os.path.join(folder, aug_img_name), img_a)
+                at_least_one_box = True
                 x1 = bbs.x1
                 y1 = bbs.y1
                 x2 = bbs.x2
@@ -124,6 +124,9 @@ def save_augmentations(images: list, bbs: list, df: pd.DataFrame, filename: str,
                 height, width = img_a.shape[:-1]
                 df = df.append(pd.DataFrame(data=[aug_img_name, width, height, c, x1, y1, x2, y2],
                                             index=df.columns.tolist()).T)
+        if at_least_one_box:
+            # save image at specified folder
+            cv2.imwrite(os.path.join(folder, aug_img_name), img_a)
 
     return df
 
