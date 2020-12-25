@@ -102,12 +102,6 @@ def save_augmentations(images: list, bbs: list, df: pd.DataFrame, filename: str,
         if resize:
             org_shape = img_a.shape[:-1]
             img_a = cv2.resize(img_a, shape, interpolation=cv2.INTER_NEAREST)
-        # save image at specified folder
-        cv2.imwrite(os.path.join(folder, aug_img_name), img_a)
-        # get meta information from the bounding_boxes
-
-        height = bb_a.shape[0]
-        width = bb_a.shape[1]
 
         # clean bb_a --> use only bounding boxes that are still in the frame (cropping can lead to bounding boxes being
         # removed from the images)
@@ -117,14 +111,19 @@ def save_augmentations(images: list, bbs: list, df: pd.DataFrame, filename: str,
         for bbs in bb_a:
             if resize:
                 bbs = bbs.project(org_shape, shape)
-            x1 = bbs.x1
-            y1 = bbs.y1
-            x2 = bbs.x2
-            y2 = bbs.y2
-            c = bbs.label
-            # append extracted data to the DataFrame
-            df = df.append(pd.DataFrame(data=[aug_img_name, width, height, c, x1, y1, x2, y2],
-                                        index=df.columns.tolist()).T)
+            arr = bbs.compute_out_of_image_fraction(img_a)
+            if arr < 0.8:
+                # save image at specified folder
+                cv2.imwrite(os.path.join(folder, aug_img_name), img_a)
+                x1 = bbs.x1
+                y1 = bbs.y1
+                x2 = bbs.x2
+                y2 = bbs.y2
+                c = bbs.label
+                # append extracted data to the DataFrame
+                height, width = img_a.shape[:-1]
+                df = df.append(pd.DataFrame(data=[aug_img_name, width, height, c, x1, y1, x2, y2],
+                                            index=df.columns.tolist()).T)
 
     return df
 
