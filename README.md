@@ -6,6 +6,7 @@ The following Python packages are needed:
 - pandas 
 - opencv
 - imgaug
+- matplotlib
 
 How to use the code:
 1. run the script scripts/aug_images.py
