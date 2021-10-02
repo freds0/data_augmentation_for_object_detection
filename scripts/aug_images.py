@@ -15,10 +15,10 @@ seq = iaa.Sequential([
     # But we only blur about 50% of all images.
     iaa.Sometimes(
         0.5,
-        iaa.GaussianBlur(sigma=(0, 0.5))
+        iaa.GaussianBlur(sigma=(0, 0.05))
     ),
     # Strengthen or weaken the contrast in each image.
-    iaa.LinearContrast((0.75, 1.5)),
+    iaa.LinearContrast((0.95, 1.05)),
     # Add gaussian noise.
     # For 50% of all images, we sample the noise once per pixel.
     # For the other 50% of all images, we sample the noise per pixel AND
@@ -28,7 +28,7 @@ seq = iaa.Sequential([
     # Make some images brighter and some darker.
     # In 20% of all cases, we sample the multiplier once per channel,
     # which can end up changing the color of the images.
-    iaa.Multiply((0.6, 1.4), per_channel=0.4),
+    iaa.Multiply((0.95, 1.05), per_channel=0.25),
     # Apply affine transformations to each image.
     # Scale/zoom them, translate/move them, rotate them and shear them.
     iaa.Affine(
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     # specify folder
     folder = 'test'
     # define number of augmentations per image
-    augmentations = 10
+    augmentations = 3
     # specify if the image should be resized
     resize = True
     # define shape (should be equal to requested shape of the object detection model

@@ -24,12 +24,16 @@ def create_comparison_plot(aug_df: pd.DataFrame, aug_img_name: str, df: pd.DataF
     aug_img = cv2.imread(os.path.join('..', 'images', aug_folder, aug_img_name))
     aug_img = get_image_with_box(aug_img, aug_img_name, aug_df)
 
+    aug_img = aug_img[:, :, [2, 1, 0]]
+
     org_folder = os.path.join('..', 'images', folder)
     # load augmented image
     org_img = cv2.imread(os.path.join('..', 'images', org_folder, img_name))
     org_img = get_image_with_box(org_img, img_name, df)
 
-    fig, axs = plt.subplots(1, 2)
+    org_img = org_img[:, :, [2, 1, 0]]
+
+    fig, axs = plt.subplots(1, 2, figsize=[20, 10])
 
     ax = axs[0]
     ax.imshow(org_img)

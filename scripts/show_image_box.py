@@ -39,7 +39,7 @@ def get_image_with_box(img: np.ndarray, img_name: str, df: pd.DataFrame) -> np.n
 
 if __name__ == '__main__':
     # define image folder
-    folder = 'test_aug'
+    folder = 'train'
 
     # load annotations of specified folder
     df = pd.read_csv(os.path.join('..', 'annotations', f'{folder}.csv'))
