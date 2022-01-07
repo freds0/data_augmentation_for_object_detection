@@ -1,16 +1,46 @@
 import os
 import cv2
+import argparse
 import pandas as pd
-
+import tqdm
 import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
+import imgaug as ia
+import time
 
+ia.seed(int(time.time() * 10**7))
 
 # specify augmentations that will be executed on each image randomly
 seq = iaa.Sequential([
     iaa.Fliplr(0.5), # horizontal flips
-    iaa.Flipud(0.2), # vertical flip
-    iaa.Crop(percent=(0, 0.3)), # random crops
+    #iaa.Flipud(0.2), # vertical flip
+    iaa.Sometimes(
+        0.1,    
+        iaa.Snowflakes()
+    ),
+    iaa.Sometimes(
+        0.1,    
+        iaa.Clouds()
+    ),
+    iaa.Sometimes(
+        0.1, 
+        iaa.BlendAlpha((0.5, 1.0), iaa.Fog())
+    ),
+
+    iaa.Sometimes(
+        0.5,    
+        iaa.Crop(percent=(0, 0.3)), # random crops
+    ),
+
+    iaa.Sometimes(
+        0.1,
+        iaa.CoarseDropout((0.0, 0.2), size_px=8)
+    ),
+
+    iaa.Sometimes(
+        0.5,
+        iaa.GammaContrast((0.5, 2.0))
+    ),
     # Small gaussian blur with random sigma between 0 and 0.5.
     # But we only blur about 50% of all images.
     iaa.Sometimes(
@@ -18,13 +48,18 @@ seq = iaa.Sequential([
         iaa.GaussianBlur(sigma=(0, 0.05))
     ),
     # Strengthen or weaken the contrast in each image.
-    iaa.LinearContrast((0.95, 1.05)),
+    iaa.LinearContrast((0.8, 1.2)),
     # Add gaussian noise.
     # For 50% of all images, we sample the noise once per pixel.
     # For the other 50% of all images, we sample the noise per pixel AND
     # channel. This can change the color (not only brightness) of the
     # pixels.
     iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+
+    iaa.Sometimes(
+        0.1,
+        iaa.AddToHueAndSaturation((-10, 10))
+    ),
     # Make some images brighter and some darker.
     # In 20% of all cases, we sample the multiplier once per channel,
     # which can end up changing the color of the images.
@@ -32,7 +67,7 @@ seq = iaa.Sequential([
     # Apply affine transformations to each image.
     # Scale/zoom them, translate/move them, rotate them and shear them.
     iaa.Affine(
-         scale={"x": (1, 1.5), "y": (1, 1.5)},
+         scale={"x": (1, 1.3), "y": (1, 1.3)},
          translate_percent={"x": (-0.05, 0.05), "y": (-0.05, 0.05)},
          rotate=(-3, 3),
     )],
@@ -96,7 +131,8 @@ def save_augmentations(images: list, bbs: list, df: pd.DataFrame, filename: str,
     # iterate over the images
     for [i, img_a], bb_a in zip(enumerate(images), bbs):
         # define new name
-        aug_img_name = f'{filename}_{i}.jpg'
+        new_filename = os.path.basename(filename).replace('.jpg', '')
+        aug_img_name = f'{new_filename}_data_aug{i}.jpg'
         # check if image should be resized
         org_shape = (None, None)
         if resize:
@@ -115,10 +151,10 @@ def save_augmentations(images: list, bbs: list, df: pd.DataFrame, filename: str,
             arr = bbs.compute_out_of_image_fraction(img_a)
             if arr < 0.8:
                 at_least_one_box = True
-                x1 = bbs.x1
-                y1 = bbs.y1
-                x2 = bbs.x2
-                y2 = bbs.y2
+                x1 = int(bbs.x1)
+                y1 = int(bbs.y1)
+                x2 = int(bbs.x2)
+                y2 = int(bbs.y2)
                 c = bbs.label
                 # append extracted data to the DataFrame
                 height, width = img_a.shape[:-1]
@@ -132,35 +168,49 @@ def save_augmentations(images: list, bbs: list, df: pd.DataFrame, filename: str,
 
 
 if __name__ == '__main__':
-    # specify folder
-    folder = 'test'
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base_dir', default='./')
+    parser.add_argument('--input_folder', default='images/test')
+    parser.add_argument('--output_folder', default='images/test_aug')
+    parser.add_argument('--input_csv', default='annotations/test.csv')
+    parser.add_argument('--output_csv', default='annotations/test_aug.csv')
+    parser.add_argument('--image_extension', default='.jpg')
+    parser.add_argument('--augmentations', default=1)
+    parser.add_argument('--new_shape', default='', help='Ex. (1280, 720)')
+    args = parser.parse_args()
+
     # define number of augmentations per image
-    augmentations = 3
+    augmentations = args.augmentations
     # specify if the image should be resized
-    resize = True
+    resize = False
     # define shape (should be equal to requested shape of the object detection model
-    new_shape = (512, 512)
+    new_shape = (1280, 720)
     # define input folder
-    input_folder = os.path.join('..', 'images', folder)
+    input_folder = os.path.join(args.base_dir, args.input_folder)
     # define and create output_folder
-    output_folder = os.path.join('..', 'images', f'{folder}_aug')
+    output_folder = os.path.join(args.base_dir, args.output_folder)
+    # create output folder
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
+
     # 1. get a list of all images in the folder
-    img_list = [img for img in os.listdir(input_folder) if img.endswith('.jpg')]
+    img_list = [img for img in os.listdir(input_folder) if img.endswith(args.image_extension)]
 
     # 2. load DataFrame with annotations
-    df = pd.read_csv(os.path.join('..', 'annotations', f'{folder}.csv'))
+    df = pd.read_csv(os.path.join(args.base_dir, args.input_csv))
+    print('Number of images found: {}'.format(len(df)))
+
     # create a new pandas table for the augmented images' bounding boxes
     aug_df = pd.DataFrame(columns=df.columns.tolist())
 
     # 2. iterate over the images and augmentate them
-    for filename in img_list:
+    for filename in tqdm.tqdm(img_list):
         # augment image
-        aug_images, aug_bbs = aug_image(filename, df, input_folder, augmentations)
+        aug_images, aug_bbs = aug_image(filename, df, input_folder, args.augmentations)
         # store augmentations in new DataFrame and save image
         aug_df = save_augmentations(aug_images, aug_bbs, aug_df, filename, output_folder, resize, new_shape)
 
     # save new DataFrame
-    aug_df.to_csv(os.path.join('..', 'annotations', f'{folder}_aug.csv'))
+    aug_df.to_csv(os.path.join(args.base_dir, args.output_csv))
 
