@@ -8,70 +8,85 @@ from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 import imgaug as ia
 import time
 
-ia.seed(int(time.time() * 10**7))
+#ia.seed(int(time.time() * 10**7))
+ia.seed(42)
 
 # specify augmentations that will be executed on each image randomly
-seq = iaa.Sequential([
-    iaa.Fliplr(0.5), # horizontal flips
-    #iaa.Flipud(0.2), # vertical flip
-    iaa.Sometimes(
-        0.1,    
-        iaa.Snowflakes()
-    ),
-    iaa.Sometimes(
-        0.1,    
-        iaa.Clouds()
-    ),
-    iaa.Sometimes(
-        0.1, 
-        iaa.BlendAlpha((0.5, 1.0), iaa.Fog())
-    ),
 
-    iaa.Sometimes(
-        0.5,    
-        iaa.Crop(percent=(0, 0.3)), # random crops
-    ),
+# Replace in every image each 10 row with black pixels:
+def img_func_horizontal(images, random_state, parents, hooks):
+    for img in images:
+        img[::10] = 0
+    return images
 
-    iaa.Sometimes(
-        0.1,
-        iaa.CoarseDropout((0.0, 0.2), size_px=8)
-    ),
+# Replace in every image each 10 cols with black pixels:
+def img_func_vertical(images, random_state, parents, hooks):
+    for img in images:
+        img[:,::10] = 0
+        #print(img.shape)
+    return images
 
-    iaa.Sometimes(
-        0.5,
-        iaa.GammaContrast((0.5, 2.0))
-    ),
-    # Small gaussian blur with random sigma between 0 and 0.5.
-    # But we only blur about 50% of all images.
-    iaa.Sometimes(
-        0.5,
-        iaa.GaussianBlur(sigma=(0, 0.05))
-    ),
-    # Strengthen or weaken the contrast in each image.
-    iaa.LinearContrast((0.8, 1.2)),
-    # Add gaussian noise.
-    # For 50% of all images, we sample the noise once per pixel.
-    # For the other 50% of all images, we sample the noise per pixel AND
-    # channel. This can change the color (not only brightness) of the
-    # pixels.
-    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+def keypoint_func(keypoints_on_images, random_state, parents, hooks):
+    return keypoints_on_images
 
-    iaa.Sometimes(
-        0.1,
-        iaa.AddToHueAndSaturation((-10, 10))
-    ),
-    # Make some images brighter and some darker.
-    # In 20% of all cases, we sample the multiplier once per channel,
-    # which can end up changing the color of the images.
-    iaa.Multiply((0.95, 1.05), per_channel=0.25),
-    # Apply affine transformations to each image.
-    # Scale/zoom them, translate/move them, rotate them and shear them.
+seq = iaa.SomeOf(2, [
+    # Color
+    iaa.GammaContrast((0.3, 3)),         
+    iaa.LinearContrast((0.8, 1.2)),      
+    iaa.AddToHueAndSaturation((-10, 10)), 
+    iaa.Invert(0.05),                      
+    iaa.Solarize(0.1, threshold=(32, 128)),
+    # Localizations
     iaa.Affine(
-         scale={"x": (1, 1.3), "y": (1, 1.3)},
-         translate_percent={"x": (-0.05, 0.05), "y": (-0.05, 0.05)},
-         rotate=(-3, 3),
-    )],
-    random_order=True) # apply augmenters in random order# apply augmenters in random order
+         scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},                     # Scale images to a value of 50 to 150% of their original size:
+         translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},       # Translate images by -20 to +20% on x- and y-axis independently:
+         rotate=(-15, 15),                                             # Rotate images by -45 to 45 degrees:
+         shear=(-15, 15),                                              # Shear images by -16 to 16 degrees:         
+    ),
+    # Deformations
+    iaa.PiecewiseAffine(scale=(0.01, 0.03)),                # Apply affine transformations that differ between local neighbourhoods.
+    iaa.PerspectiveTransform(scale=(0.05, 0.15)),           # Apply random four point perspective transformations to images.
+    iaa.ElasticTransformation(alpha=(1.0, 2.0), sigma=0.25),  # Transform images by moving pixels locally around using displacement fields.
+    # Dropout
+    iaa.Dropout(p=(0.05, 0.1)),                           # Augmenter that sets a certain fraction of pixels in images to zero.
+    iaa.CoarseDropout((0.01,0.05), size_percent=(0.1, 0.2)),          # Augmenter that sets rectangular areas within images to zero.
+    iaa.CoarsePepper((0.01,0.05), size_percent=(0.1, 0.2)),  # Replace rectangular areas in images with black-ish pixel noise.
+    iaa.Salt((0.05, 0.1)),                                          # Replace pixels in images with salt noise, i.e. white-ish pixels.
+    iaa.CoarseSalt((0.01,0.05), size_percent=(0.1, 0.2)),         # Replace rectangular areas in images with white-ish pixel noise.
+    iaa.Pepper((0.05, 0.1)),                                        # Replace pixels in images with pepper noise, i.e. black-ish pixels.
+    iaa.CoarsePepper((0.01,0.05), size_percent=(0.1, 0.2)),       # Replace rectangular areas in images with black-ish pixel noise.
+    iaa.SaltAndPepper((0.05, 0.1)),                                 # Replace pixels in images with salt/pepper noise (white/black-ish colors).
+    iaa.CoarseSaltAndPepper((0.01,0.05), size_percent=(0.1, 0.2)),# Replace rectangular areas in images with white/black-ish pixel noise.
+    iaa.CoarseSaltAndPepper((0.01,0.05), 
+        size_percent=(0.1, 0.2), per_channel=True
+    ),
+    # Noise
+    iaa.Add((-30, 30), per_channel=0.1),                    # Add random values between -40 and 40 to images. In 50% of all images the values differ per channel (3 sampled value)
+    iaa.AddElementwise((-40, 40), per_channel=0.5),          # Add values to the pixels of images with possibly different values for neighbouring pixels.    
+    iaa.ImpulseNoise((0.05, 0.1)),                          # Add impulse noise to images.
+    iaa.AdditiveGaussianNoise(scale=(20, 30)),               # Add noise sampled from gaussian distributions elementwise to images.
+    iaa.AdditiveLaplaceNoise(scale=(0.1*255, 0.2*255)),           # Add noise sampled from laplace distributions elementwise to images.
+    # Flip
+    iaa.Fliplr(0.5),
+    # Degradation
+    iaa.JpegCompression(compression=(80, 95)),
+    iaa.GaussianBlur(sigma=(1.0,3.0)),
+    iaa.AverageBlur(k=(2, 5)),
+    iaa.MedianBlur(k=(3, 5)), 
+    iaa.BilateralBlur(                            # Blur/Denoise an image using a bilateral filter.
+        d=(3, 10), sigma_color=(10, 250), sigma_space=(10, 250)
+    ),
+    iaa.MotionBlur(k=(5,10)),
+    # Weather
+    iaa.Clouds(),
+    iaa.Fog(),
+    iaa.Snowflakes(flake_size=(0.7, 0.95), speed=(0.001, 0.03)),
+    iaa.Rain(speed=(0.1, 0.3)),
+    # Lambda
+    iaa.Lambda(img_func_vertical, keypoint_func),
+    iaa.Lambda(img_func_horizontal, keypoint_func),
+]) # apply augmenters in random order# apply augmenters in random order
+
 
 
 def aug_image(filename: str, df: pd.DataFrame, folder: str, augmentations: int) -> (list, list):
@@ -199,7 +214,7 @@ if __name__ == '__main__':
 
     # 2. load DataFrame with annotations
     df = pd.read_csv(os.path.join(args.base_dir, args.input_csv))
-    print('Number of images found: {}'.format(len(df)))
+    print('Number of images found: {}'.format(len(img_list)))
 
     # create a new pandas table for the augmented images' bounding boxes
     aug_df = pd.DataFrame(columns=df.columns.tolist())
