@@ -209,22 +209,23 @@ if __name__ == '__main__':
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
 
-    # 1. get a list of all images in the folder
-    img_list = [img for img in os.listdir(input_folder) if img.endswith(args.image_extension)]
+    # 1. load DataFrame with annotations
+    data = pd.read_csv(os.path.join(args.base_dir, args.input_csv))    
 
-    # 2. load DataFrame with annotations
-    df = pd.read_csv(os.path.join(args.base_dir, args.input_csv))
+    # 2. get a list of all images 
+    img_list = list(data.sort_values('filename').drop_duplicates('filename', keep='last')['filename'])
+    
     print('Number of images found: {}'.format(len(img_list)))
 
     # create a new pandas table for the augmented images' bounding boxes
-    aug_df = pd.DataFrame(columns=df.columns.tolist())
+    aug_data= pd.DataFrame(columns=data.columns.tolist())
 
     # 2. iterate over the images and augmentate them
     for filename in tqdm.tqdm(img_list):
         # augment image
-        aug_images, aug_bbs = aug_image(filename, df, input_folder, args.augmentations)
+        aug_images, aug_bbs = aug_image(filename, data, input_folder, args.augmentations)
         # store augmentations in new DataFrame and save image
-        aug_df = save_augmentations(aug_images, aug_bbs, aug_df, filename, output_folder, resize, new_shape)
+        aug_df = save_augmentations(aug_images, aug_bbs, aug_data, filename, output_folder, resize, new_shape)
 
     # save new DataFrame
     aug_df.to_csv(os.path.join(args.base_dir, args.output_csv))
