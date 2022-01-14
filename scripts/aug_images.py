@@ -102,6 +102,8 @@ def aug_image(filename: str, df: pd.DataFrame, folder: str, augmentations: int) 
     :param augmentations: defines the number of augmentations to be done
     :return: list of augmented images, list of bouding_boxes for each augmented image
     """
+    print(folder)
+    print(filename)
     # load image
     img = cv2.imread(os.path.join(folder, filename))
     # create empty list for bounding_boxes
@@ -225,8 +227,8 @@ if __name__ == '__main__':
         # augment image
         aug_images, aug_bbs = aug_image(filename, data, input_folder, args.augmentations)
         # store augmentations in new DataFrame and save image
-        aug_df = save_augmentations(aug_images, aug_bbs, aug_data, filename, output_folder, resize, new_shape)
+        aug_data = save_augmentations(aug_images, aug_bbs, aug_data, filename, output_folder, resize, new_shape)
 
     # save new DataFrame
-    aug_df.to_csv(os.path.join(args.base_dir, args.output_csv))
+    aug_data.to_csv(os.path.join(args.base_dir, args.output_csv))
 
